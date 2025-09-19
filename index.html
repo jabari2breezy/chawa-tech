@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chawa Tech Farms</title>
+    <title>Chawa farms</title>
     <!-- Load Tailwind CSS from CDN for a modern, responsive UI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -32,6 +32,19 @@
         .modal {
             @apply fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50;
         }
+
+        /* Directional Pad styles */
+        #mobile-controls {
+            @apply lg:hidden flex-col items-center justify-center mt-6;
+        }
+        
+        .d-pad-row {
+            @apply flex justify-center;
+        }
+
+        .d-pad-btn {
+            @apply bg-gray-700 text-gray-200 w-12 h-12 m-1 rounded-xl flex items-center justify-center text-2xl cursor-pointer select-none active:bg-gray-600;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100">
@@ -51,6 +64,27 @@
             
             <!-- Game Canvas -->
             <canvas id="gameCanvas" width="600" height="480" class="w-full max-w-xl"></canvas>
+            
+            <!-- Mobile Controls -->
+            <div id="mobile-controls" class="flex-col items-center mt-6">
+                <p class="text-xs text-gray-400 mb-2 hidden lg:block">Use arrow keys on your keyboard to move.</p>
+                <p class="text-xs text-gray-400 mb-2 block lg:hidden">Use the D-pad below to move.</p>
+                <div class="d-pad-row">
+                    <div class="d-pad-btn"></div>
+                    <div id="up-btn" class="d-pad-btn">↑</div>
+                    <div class="d-pad-btn"></div>
+                </div>
+                <div class="d-pad-row">
+                    <div id="left-btn" class="d-pad-btn">←</div>
+                    <div class="d-pad-btn"></div>
+                    <div id="right-btn" class="d-pad-btn">→</div>
+                </div>
+                <div class="d-pad-row">
+                    <div class="d-pad-btn"></div>
+                    <div id="down-btn" class="d-pad-btn">↓</div>
+                    <div class="d-pad-btn"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Right Panel: Data Dashboard and Controls -->
@@ -167,6 +201,11 @@
         const modalTitle = document.getElementById('modal-title');
         const modalContent = document.getElementById('modal-content');
         const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        const upBtn = document.getElementById('up-btn');
+        const downBtn = document.getElementById('down-btn');
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
         
         // --- Firebase/Firestore (Simulated for Immersive Environment) ---
         const firebaseConfig = JSON.parse(__firebase_config);
@@ -264,7 +303,7 @@
                      }
                  }
                  gameState.farm = farmGrid;
-                 showModal("Welcome!", "Welcome to AstroFarm! Use the arrow keys to move your farmer and the buttons to manage your fields. Your goal is to grow crops sustainably using NASA data.");
+                 showModal("Welcome!", "Welcome to AstroFarm! Use the arrow keys or the on-screen D-pad to move your farmer and the buttons to manage your fields. Your goal is to grow crops sustainably using NASA data.");
             }
             
             fetchNASAData();
@@ -463,16 +502,49 @@
             modal.classList.add('hidden');
         });
 
+        // --- Player Movement Function ---
+        function movePlayer(direction) {
+            let moved = false;
+            switch(direction) {
+                case 'up':
+                    if (player.y > 0) { player.y--; moved = true; }
+                    break;
+                case 'down':
+                    if (player.y < FARM_HEIGHT - 1) { player.y++; moved = true; }
+                    break;
+                case 'left':
+                    if (player.x > 0) { player.x--; moved = true; }
+                    break;
+                case 'right':
+                    if (player.x < FARM_WIDTH - 1) { player.x++; moved = true; }
+                    break;
+            }
+            player.animation = moved ? 'walking' : 'idle';
+        }
+
         // --- Keyboard Controls for Player Movement ---
         document.addEventListener('keydown', (e) => {
-            let moved = false;
-            if (e.key === 'ArrowUp' && player.y > 0) { player.y--; moved = true; }
-            if (e.key === 'ArrowDown' && player.y < FARM_HEIGHT - 1) { player.y++; moved = true; }
-            if (e.key === 'ArrowLeft' && player.x > 0) { player.x--; moved = true; }
-            if (e.key === 'ArrowRight' && player.x < FARM_WIDTH - 1) { player.x++; moved = true; }
-            
-            player.animation = moved ? 'walking' : 'idle';
+            switch(e.key) {
+                case 'ArrowUp':
+                    movePlayer('up');
+                    break;
+                case 'ArrowDown':
+                    movePlayer('down');
+                    break;
+                case 'ArrowLeft':
+                    movePlayer('left');
+                    break;
+                case 'ArrowRight':
+                    movePlayer('right');
+                    break;
+            }
         });
+
+        // --- On-screen D-pad Controls for Mobile ---
+        upBtn.addEventListener('click', () => movePlayer('up'));
+        downBtn.addEventListener('click', () => movePlayer('down'));
+        leftBtn.addEventListener('click', () => movePlayer('left'));
+        rightBtn.addEventListener('click', () => movePlayer('right'));
 
         // Initial setup
         initializeFirebase();
