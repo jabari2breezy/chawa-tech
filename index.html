@@ -1,554 +1,471 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chawa farms</title>
-    <!-- Load Tailwind CSS from CDN for a modern, responsive UI -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            @apply bg-gray-900 text-gray-100 flex items-center justify-center min-h-screen p-4;
-        }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Farmwise Kids: Crops, Seeds, Harvest & Shop</title>
 
-        /* Custom CSS for the game canvas */
-        #gameCanvas {
-            @apply border-4 border-gray-700 rounded-lg;
-            background-color: #5C4033; /* Dark brown for soil */
-        }
-        
-        /* Animation for the spinning gear on the button */
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+	html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0f172a; color:#e5e7eb; }
+	#app { display: grid; grid-template-rows: 60px auto; height: 100%; }
+	header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#0b1220; border-bottom:1px solid #1f2937; }
+	header .brand { display:flex; align-items:center; gap:10px; font-weight:800; }
+	header .dot { width:10px; height:10px; border-radius:50%; background:#34d399; box-shadow:0 0 12px #34d399; }
+	header .hud { display:flex; gap:10px; align-items:center; }
+	.badge { background:#0c1424; border:1px solid #1f2937; padding:6px 10px; border-radius:999px; font-weight:700; }
+	#map { height: 100%; }
+	.controls {
+		position:absolute; z-index:1000; top:12px; left:12px; width:320px;
+		background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:12px;
+		box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+	}
+	.controls h3 { margin:0 0 8px; font-size:16px; }
+	.controls .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+	.btn { background:#122; color:#e5e7eb; border:1px solid #1f2937; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:600; }
+	.btn:disabled { opacity:0.5; cursor:not-allowed; }
+	.btn.green { background:#0f2a20; border-color:#064e3b; }
+	.btn.blue { background:#0f1f2a; border-color:#1e40af; }
+	.kv { display:grid; grid-template-columns: 1fr auto; gap:6px; font-size:14px; background:#0c1424; padding:8px 10px; border-radius:8px; border:1px solid #1f2937; }
+	.k { color:#9ca3af; }
+	.v { font-weight:700; }
+	.small { font-size:12px; color:#cbd5e1; }
+	.legend { display:flex; gap:8px; align-items:center; margin-top:6px; }
+	.swatch { width:18px; height:18px; border:1px dashed #ef4444; background:rgba(239,68,68,0.15);
+		background-image: repeating-linear-gradient(45deg, rgba(239,68,68,0.45) 0, rgba(239,68,68,0.45) 2px, transparent 2px, transparent 6px);
+		border-radius:4px; }
 
-        .gear-spin {
-            animation: spin 2s linear infinite;
-        }
+	/* Crop picker modal */
+	#picker {
+		position: fixed; inset: 0; display: none; place-items: center; background: rgba(0,0,0,0.6); z-index: 1500;
+	}
+	#picker .box {
+		width: min(720px, 94vw); background:#0b1220; border:1px solid #1f2937; border-radius:14px; padding:14px;
+	}
+	#picker h3 { margin:0 0 10px; }
+	.grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px; }
+	.card { background:#0c1424; border:1px solid #1f2937; border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:6px; }
+	.card .title { font-weight:800; }
+	.card .line { display:flex; justify-content:space-between; font-size:12px; color:#cbd5e1; }
+	.buyRow { display:flex; gap:8px; align-items:center; }
+	.qty { width:60px; background:#0b1220; border:1px solid #1f2937; border-radius:8px; padding:6px; color:#e5e7eb; }
 
-        /* Modal styling */
-        .modal {
-            @apply fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50;
-        }
+	/* Tutorial hint (reuse simple hint) */
+	#hint {
+		position:absolute; z-index:1101; top: 12px; right: 12px; width: 280px;
+		display:none; background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:12px;
+		box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+	}
+	#hint h4 { margin: 0 0 6px; font-size: 14px; }
 
-        /* Directional Pad styles */
-        #mobile-controls {
-            @apply lg:hidden flex-col items-center justify-center mt-6;
-        }
-        
-        .d-pad-row {
-            @apply flex justify-center;
-        }
-
-        .d-pad-btn {
-            @apply bg-gray-700 text-gray-200 w-12 h-12 m-1 rounded-xl flex items-center justify-center text-2xl cursor-pointer select-none active:bg-gray-600;
-        }
-    </style>
+	@media (max-width: 720px) {
+		.controls { width: calc(100vw - 24px); left:12px; right:12px; }
+		header .help { display:none; }
+		#hint { width: calc(100vw - 24px); right: 12px; }
+	}
+</style>
 </head>
-<body class="bg-gray-900 text-gray-100">
+<body>
+<div id="app">
+	<header>
+		<div class="brand"><div class="dot"></div><div>Farmwise Kids</div></div>
+		<div class="hud">
+			<div class="badge">Day: <span id="hudDay">1</span></div>
+			<div class="badge">Money: TSh <span id="hudCash">500</span></div>
+		</div>
+	</header>
 
-    <!-- Main Game Container -->
-    <div class="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden max-w-6xl w-full flex flex-col lg:flex-row">
-        
-        <!-- Left Panel: Game Canvas and Game Info -->
-        <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gray-900 relative">
-            <h1 class="text-3xl lg:text-4xl font-extrabold text-green-400 mb-4 tracking-wide">AstroFarm Simulator</h1>
-            <div id="game-status" class="bg-gray-700 p-4 rounded-xl text-sm lg:text-base w-full max-w-md grid grid-cols-2 gap-2 mb-6">
-                <p><strong>Season:</strong> <span id="season-display" class="font-semibold text-green-300">Spring 1</span></p>
-                <p><strong>Yield:</strong> <span id="yield-display" class="font-semibold text-yellow-300">0</span> bushels</p>
-                <p><strong>Funds:</strong> <span id="funds-display" class="font-semibold text-cyan-400">$5000</span></p>
-                <p><strong>UserId:</strong> <span id="userId-display" class="font-mono text-xs text-gray-400 col-span-2"></span></p>
-            </div>
-            
-            <!-- Game Canvas -->
-            <canvas id="gameCanvas" width="600" height="480" class="w-full max-w-xl"></canvas>
-            
-            <!-- Mobile Controls -->
-            <div id="mobile-controls" class="flex-col items-center mt-6">
-                <p class="text-xs text-gray-400 mb-2 hidden lg:block">Use arrow keys on your keyboard to move.</p>
-                <p class="text-xs text-gray-400 mb-2 block lg:hidden">Use the D-pad below to move.</p>
-                <div class="d-pad-row">
-                    <div class="d-pad-btn"></div>
-                    <div id="up-btn" class="d-pad-btn">↑</div>
-                    <div class="d-pad-btn"></div>
-                </div>
-                <div class="d-pad-row">
-                    <div id="left-btn" class="d-pad-btn">←</div>
-                    <div class="d-pad-btn"></div>
-                    <div id="right-btn" class="d-pad-btn">→</div>
-                </div>
-                <div class="d-pad-row">
-                    <div class="d-pad-btn"></div>
-                    <div id="down-btn" class="d-pad-btn">↓</div>
-                    <div class="d-pad-btn"></div>
-                </div>
-            </div>
-        </div>
+	<div id="map"></div>
 
-        <!-- Right Panel: Data Dashboard and Controls -->
-        <div class="bg-gray-800 p-6 lg:w-96 flex flex-col justify-between">
-            <div>
-                <!-- NASA Data Dashboard -->
-                <div class="bg-gray-700 p-6 rounded-2xl mb-6">
-                    <h2 class="text-2xl font-bold text-sky-400 mb-4 flex items-center"><svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zM5.55 9.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM12.45 9.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM17.45 9.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"></path></svg> NASA Data Dashboard</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <p class="text-gray-400">Soil Moisture</p>
-                            <span id="soil-moisture-data" class="text-2xl font-bold text-blue-300">--%</span>
-                        </div>
-                        <div>
-                            <p class="text-gray-400">Temperature</p>
-                            <span id="temp-data" class="text-2xl font-bold text-orange-300">--°C</span>
-                        </div>
-                        <div>
-                            <p class="text-gray-400">Vegetation Index</p>
-                            <span id="ndvi-data" class="text-2xl font-bold text-green-300">--</span>
-                        </div>
-                        <div>
-                            <p class="text-gray-400">Precipitation</p>
-                            <span id="precip-data" class="text-2xl font-bold text-blue-400">-- mm</span>
-                        </div>
-                    </div>
-                </div>
+	<div class="controls" aria-live="polite">
+		<h3>Play</h3>
+		<div class="row">
+			<button id="btnPlant" class="btn green" disabled>Plant (P)</button>
+			<button id="btnFert" class="btn blue" disabled>Fertilize (F)</button>
+			<button id="btnIrr" class="btn blue" disabled>Irrigate (I)</button>
+			<button id="btnPlayPause" class="btn">Play ▷</button>
+			<button id="btnStep" class="btn">Next Day</button>
+		</div>
+		<div class="row">
+			<label class="small">Day length: <span id="lblDayLen">5s</span></label>
+			<input id="rngSpeed" type="range" min="500" max="15000" step="500" value="5000" />
+		</div>
+		<div class="row" style="margin-top:6px;">
+			<div class="kv"><div class="k">Last spot</div><div class="v" id="kvSpot">—</div></div>
+			<div class="kv"><div class="k">Soil</div><div class="v" id="kvSoil">—</div></div>
+			<div class="kv"><div class="k">Status</div><div class="v" id="kvStatus">—</div></div>
+		</div>
+		<div class="legend"><div class="swatch"></div><div class="small">No Plant Zone (towns/buildings/water). Mangrove allowed in water.</div></div>
+		<div class="small">Keys: P=Plant, F=Fertilize, I=Irrigate, Space=Play/Pause, +/-=Faster/Slower</div>
+	</div>
+</div>
 
-                <!-- Farm Actions -->
-                <div class="bg-gray-700 p-6 rounded-2xl">
-                    <h2 class="text-2xl font-bold text-green-400 mb-4 flex items-center"><svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path><path fill-rule="evenodd" clip-rule="evenodd" d="M2 12a1 1 0 011-1h.01a1 1 0 011 1v6a2 2 0 002 2h6a2 2 0 002-2v-3a1 1 0 012 0v3a4 4 0 01-4 4H6a4 4 0 01-4-4v-6z"></path></svg> Farm Actions</h2>
-                    <div class="grid grid-cols-2 gap-4">
-                        <button id="till-btn" class="bg-stone-500 hover:bg-stone-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-200">Till Land</button>
-                        <button id="plant-btn" class="bg-lime-500 hover:bg-lime-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-200">Plant Seed</button>
-                        <button id="water-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-200">Water</button>
-                        <button id="harvest-btn" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-200">Harvest</button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Next Turn Button -->
-            <button id="next-turn-btn" class="bg-green-500 hover:bg-green-600 text-white font-extrabold py-4 px-6 rounded-full mt-6 flex items-center justify-center transition-transform duration-300 transform hover:scale-105">
-                <svg class="w-6 h-6 mr-2 gear-spin" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M11.49 3.17c-.326-1.077-1.78-.323-2.316.324-.468.567-.184 1.34.469 1.34s.937-.773.469-1.34c.536-.647-1.99-1.399-2.316-.324-.326 1.077 1.78.323 2.316-.324zM10 2a8 8 0 100 16 8 8 0 000-16z" clip-rule="evenodd"></path></svg>
-                End Turn (Next Week)
-            </button>
-        </div>
-    </div>
-    
-    <!-- Modal for educational tips/messages -->
-    <div id="modal" class="modal hidden">
-        <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center relative">
-            <h3 class="text-2xl font-bold mb-4 text-sky-400" id="modal-title"></h3>
-            <p id="modal-content" class="text-gray-300 mb-6"></p>
-            <button id="modal-close-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-full transition-colors duration-200">Got it</button>
-        </div>
-    </div>
+<!-- Crop picker modal -->
+<div id="picker" role="dialog" aria-modal="true">
+	<div class="box">
+		<h3>Choose a crop for this soil and location</h3>
+		<div class="small" id="pickerInfo">Soil: — | Water zone: —</div>
+		<div id="cropGrid" class="grid" style="margin-top:10px;"></div>
+		<div style="margin-top:10px; display:flex; justify-content:flex-end; gap:8px;">
+			<button id="btnClosePicker" class="btn">Cancel</button>
+		</div>
+	</div>
+</div>
 
-    <!-- Firebase imports for data storage (simulated here) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+<!-- Hint -->
+<div id="hint">
+	<h4>Tip</h4>
+	<div id="hintBody" class="small">Press P to plant a crop.</div>
+</div>
 
-        // Global variables for Firebase (will be provided by the runtime)
-        const __firebase_config = '{}';
-        const __initial_auth_token = undefined;
-        const __app_id = 'default-app-id';
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script src="https://unpkg.com/osmtogeojson@3.0.0-beta.5/osmtogeojson.js"></script>
+<script>
+/* =================== Map =================== */
+const map = L.map('map', { zoomControl: true }).setView([ -6.3690, 34.8888 ], 6); // Tanzania center
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+setTimeout(() => map.invalidateSize(), 0);
 
-        let app, auth, db;
-        let userId;
+/* =================== Restricted areas =================== */
+/* Buildings/settlements */
+const restrictedLayer = L.geoJSON([], {
+	style: () => ({ color:'#ef4444', weight:2, dashArray:'6,4', fillColor:'#ef4444', fillOpacity:0.15 })
+}).addTo(map);
+/* Water bodies (oceans/lakes/rivers as polygons) */
+const waterLayer = L.geoJSON([], {
+	style: () => ({ color:'#60a5fa', weight:2, dashArray:'6,4', fillColor:'#60a5fa', fillOpacity:0.15 })
+}).addTo(map);
 
-        // --- Core Game Logic ---
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const TILE_SIZE = 60;
-        const FARM_WIDTH = 10;
-        const FARM_HEIGHT = 8;
-        const player = { x: 0, y: 0, w: 20, h: 40, color: '#FFD700', animation: 'idle', frame: 0 };
-        const farmGrid = [];
-        let gameActive = false;
-        
-        let gameState = {
-            season: 1,
-            funds: 5000,
-            yield: 0,
-            nasaData: {}
-        };
+let abortA = null, abortW = null;
+async function loadRestricted() {
+	try {
+		if (abortA) abortA.abort();
+		abortA = new AbortController();
+		const b = map.getBounds();
+		const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+		const q = `
+[out:json][timeout:25];
+(
+  way["landuse"~"residential|commercial|industrial|retail"](${bbox});
+  relation["landuse"~"residential|commercial|industrial|retail"](${bbox});
+  way["building"](${bbox});
+  relation["building"](${bbox});
+);
+out body; >; out skel qt;`;
+		const res = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', headers:{'Content-Type':'text/plain;charset=UTF-8'}, body:q, signal:abortA.signal });
+		if (!res.ok) throw new Error();
+		const osm = await res.json();
+		const gj = osmtogeojson(osm);
+		restrictedLayer.clearLayers();
+		restrictedLayer.addData(gj);
+	} catch {}
+}
+async function loadWater() {
+	try {
+		if (abortW) abortW.abort();
+		abortW = new AbortController();
+		const b = map.getBounds();
+		const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+		const q = `
+[out:json][timeout:25];
+(
+  way["natural"="water"](${bbox});
+  relation["natural"="water"](${bbox});
+  way["waterway"="riverbank"](${bbox});
+  relation["waterway"="riverbank"](${bbox});
+  way["landuse"="reservoir"](${bbox});
+  relation["landuse"="reservoir"](${bbox});
+);
+out body; >; out skel qt;`;
+		const res = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', headers:{'Content-Type':'text/plain;charset=UTF-8'}, body:q, signal:abortW.signal });
+		if (!res.ok) throw new Error();
+		const osm = await res.json();
+		const gj = osmtogeojson(osm);
+		waterLayer.clearLayers();
+		waterLayer.addData(gj);
+	} catch {}
+}
+map.on('moveend', () => { loadRestricted(); loadWater(); });
+loadRestricted(); loadWater();
 
-        const cropTypes = {
-            corn: { name: 'Corn', color: '#B3E5FC', growthRate: 0.1, waterNeed: 0.2, yield: 20 },
-            soybeans: { name: 'Soybeans', color: '#C8E6C9', growthRate: 0.15, waterNeed: 0.15, yield: 25 },
-            wheat: { name: 'Wheat', color: '#FFECB3', growthRate: 0.08, waterNeed: 0.1, yield: 15 }
-        };
+function pointInLayer(latlng, layer) {
+	const pt = turf.point([latlng.lng, latlng.lat]);
+	let inside = false;
+	layer.eachLayer(l => {
+		const gj = l.toGeoJSON();
+		if (!gj.geometry) return;
+		if (gj.geometry.type === 'Polygon' || gj.geometry.type === 'MultiPolygon') {
+			if (turf.booleanPointInPolygon(pt, gj)) inside = true;
+		}
+	});
+	return inside;
+}
+function isNoPlantArea(latlng) {
+	return pointInLayer(latlng, restrictedLayer);
+}
+function isWaterArea(latlng) {
+	return pointInLayer(latlng, waterLayer);
+}
 
-        // UI elements
-        const seasonDisplay = document.getElementById('season-display');
-        const fundsDisplay = document.getElementById('funds-display');
-        const yieldDisplay = document.getElementById('yield-display');
-        const userIdDisplay = document.getElementById('userId-display');
+/* =================== Soil, UI refs, game state =================== */
+function soilAt(lat, lon) {
+	const v = Math.abs(Math.sin(lat) * Math.cos(lon));
+	if (v < 0.25) return 'Sandy';
+	if (v < 0.5) return 'Loam';
+	if (v < 0.75) return 'Silty';
+	return 'Clay';
+}
+const $ = (sel) => document.querySelector(sel);
+const hudDay = $('#hudDay'), hudCash = $('#hudCash');
+const btnPlant = $('#btnPlant'), btnFert = $('#btnFert'), btnIrr = $('#btnIrr');
+const btnPlayPause = $('#btnPlayPause'), btnStep = $('#btnStep');
+const rngSpeed = $('#rngSpeed'), lblDayLen = $('#lblDayLen');
+const kvSpot = $('#kvSpot'), kvSoil = $('#kvSoil'), kvStatus = $('#kvStatus');
+const picker = $('#picker'), pickerInfo = $('#pickerInfo'), cropGrid = $('#cropGrid'), btnClosePicker = $('#btnClosePicker');
+const hint = $('#hint'), hintBody = $('#hintBody');
 
-        const soilMoistureData = document.getElementById('soil-moisture-data');
-        const tempData = document.getElementById('temp-data');
-        const ndviData = document.getElementById('ndvi-data');
-        const precipData = document.getElementById('precip-data');
+const game = { day:1, timer:null, dayMs:Number(rngSpeed.value), cash:500 };
+hudDay.textContent = '1'; hudCash.textContent = String(game.cash);
+lblDayLen.textContent = `${Math.round(game.dayMs/100)/10}s`.replace('.0','');
 
-        const tillBtn = document.getElementById('till-btn');
-        const plantBtn = document.getElementById('plant-btn');
-        const waterBtn = document.getElementById('water-btn');
-        const harvestBtn = document.getElementById('harvest-btn');
-        const nextTurnBtn = document.getElementById('next-turn-btn');
+/* =================== Crop catalog (Tanzania-focused) =================== */
+const cropCatalog = [
+	// name, id, soils, requiresWater, daysToMature, seedCost, sellPrice, emoji
+	{ id:'maize',      name:'Maize (Mahindi)',        soils:['Loam','Sandy','Silty'], requiresWater:false, days:10, seed:20, sell:60, emoji:'🌽' },
+	{ id:'rice',       name:'Rice (Mchele)',          soils:['Clay','Silty'],         requiresWater:false, days:10, seed:25, sell:70, emoji:'🌾' },
+	{ id:'cassava',    name:'Cassava (Muhogo)',       soils:['Sandy','Loam'],         requiresWater:false, days:12, seed:30, sell:90, emoji:'🥔' },
+	{ id:'sorghum',    name:'Sorghum (Mtama)',        soils:['Sandy','Loam'],         requiresWater:false, days:10, seed:18, sell:55, emoji:'🌾' },
+	{ id:'millet',     name:'Millet (Uwele)',         soils:['Sandy','Loam'],         requiresWater:false, days:9,  seed:16, sell:50, emoji:'🌾' },
+	{ id:'banana',     name:'Banana (Ndizi)',         soils:['Loam','Silty'],         requiresWater:false, days:14, seed:40, sell:120, emoji:'🍌' },
+	{ id:'mango',      name:'Mango (Embe)',           soils:['Loam','Sandy'],         requiresWater:false, days:14, seed:45, sell:140, emoji:'🥭' },
+	{ id:'avocado',    name:'Avocado',                soils:['Loam','Silty'],         requiresWater:false, days:14, seed:45, sell:130, emoji:'🥑' },
+	{ id:'papaya',     name:'Papaya (Papai)',         soils:['Loam','Sandy'],         requiresWater:false, days:12, seed:30, sell:100, emoji:'🍈' },
+	{ id:'pineapple',  name:'Pineapple (Nanasi)',     soils:['Sandy','Loam'],         requiresWater:false, days:12, seed:35, sell:110, emoji:'🍍' },
+	{ id:'tomato',     name:'Tomato (Nyanya)',        soils:['Loam','Silty'],         requiresWater:false, days:8,  seed:15, sell:50, emoji:'🍅' },
+	{ id:'onion',      name:'Onion (Kitunguu)',       soils:['Sandy','Loam'],         requiresWater:false, days:9,  seed:12, sell:45, emoji:'🧅' },
+	{ id:'spinach',    name:'Spinach (Mchicha)',      soils:['Loam','Silty'],         requiresWater:false, days:7,  seed:10, sell:40, emoji:'🥬' },
+	{ id:'cowpea',     name:'Cowpea (Kunde)',         soils:['Sandy','Loam'],         requiresWater:false, days:9,  seed:12, sell:45, emoji:'🫘' },
+	{ id:'pigeonpea',  name:'Pigeon pea (Mbaazi)',    soils:['Sandy','Loam'],         requiresWater:false, days:11, seed:22, sell:70, emoji:'🫘' },
+	{ id:'groundnut',  name:'Groundnut (Karanga)',    soils:['Sandy','Loam'],         requiresWater:false, days:10, seed:20, sell:65, emoji:'🥜' },
+	{ id:'sunflower',  name:'Sunflower (Alizeti)',    soils:['Sandy','Loam'],         requiresWater:false, days:10, seed:18, sell:60, emoji:'🌻' },
+	{ id:'cashew',     name:'Cashew (Korosho)',       soils:['Sandy'],                requiresWater:false, days:14, seed:50, sell:160, emoji:'🥜' },
+	{ id:'clove',      name:'Cloves (Karafuu)',       soils:['Loam','Silty'],         requiresWater:false, days:15, seed:55, sell:180, emoji:'🌿' },
+	{ id:'mangrove',   name:'Mangrove (Mikoko)',      soils:['Silty','Clay','Sandy'], requiresWater:true,  days:12, seed:20, sell:90, emoji:'🌳' } // only in water
+];
+/* seed inventory: cropId -> quantity */
+const seeds = {};
+cropCatalog.forEach(c => seeds[c.id] = 0);
 
-        const modal = document.getElementById('modal');
-        const modalTitle = document.getElementById('modal-title');
-        const modalContent = document.getElementById('modal-content');
-        const modalCloseBtn = document.getElementById('modal-close-btn');
+/* =================== Plants and growth =================== */
+const plants = []; // {latlng, dayPlanted, stageIndex, marker, cropId}
+const stageIcons = [
+	{ name:'Seed',   size:36, emoji:'🌱' },
+	{ name:'Sprout', size:56, emoji:'🌿' },
+	{ name:'Young',  size:86, emoji:'🪴' },
+	{ name:'Tree',   size:140, emoji:'🌳' } // used as intermediate for tree-like crops
+];
+function makeEmojiMarker(latlng, emoji, px, title='') {
+	return L.marker(latlng, { icon: L.divIcon({
+		className:'emoji',
+		html:`<div title="${title}" style="font-size:${px}px; line-height:1; filter: drop-shadow(0 3px 3px rgba(0,0,0,0.55));">${emoji}</div>`,
+		iconSize:[px,px], iconAnchor:[px/2, px/2]
+	})});
+}
+function cropStageEmoji(crop, ageDays) {
+	// 0..mature → stages then crop emoji
+	if (ageDays < Math.ceil(crop.days * 0.2)) return {emoji:stageIcons[0].emoji, size:stageIcons[0].size};
+	if (ageDays < Math.ceil(crop.days * 0.5)) return {emoji:stageIcons[1].emoji, size:stageIcons[1].size};
+	if (ageDays < Math.ceil(crop.days * 0.8)) return {emoji:stageIcons[2].emoji, size:stageIcons[2].size};
+	// Mature: show crop emoji big (trees/fruit look big)
+	return {emoji:crop.emoji, size: crop.id==='mangrove' || ['mango','banana','avocado'].includes(crop.id) ? 140 : 100};
+}
+function addPlant(latlng, cropId) {
+	const crop = cropCatalog.find(c => c.id === cropId);
+	const s = cropStageEmoji(crop, 0);
+	const m = makeEmojiMarker(latlng, s.emoji, s.size, crop.name).addTo(map);
+	const plant = { latlng, dayPlanted: game.day, marker:m, cropId, harvested:false };
+	m.on('click', () => tryHarvest(plant));
+	plants.push(plant);
+}
+function updatePlants() {
+	for (const p of plants) {
+		if (p.harvested) continue;
+		const crop = cropCatalog.find(c => c.id === p.cropId);
+		const age = Math.max(0, game.day - p.dayPlanted);
+		const s = cropStageEmoji(crop, age);
+		p.marker.setIcon(L.divIcon({
+			className:'emoji',
+			html:`<div title="${crop.name}" style="font-size:${s.size}px; line-height:1; filter: drop-shadow(0 3px 3px rgba(0,0,0,0.55));">${s.emoji}</div>`,
+			iconSize:[s.size,s.size], iconAnchor:[s.size/2, s.size/2]
+		}));
+	}
+}
+function isMature(plant) {
+	const crop = cropCatalog.find(c => c.id === plant.cropId);
+	const age = game.day - plant.dayPlanted;
+	return age >= crop.days;
+}
+function tryHarvest(plant) {
+	if (plant.harvested) return;
+	const crop = cropCatalog.find(c => c.id === plant.cropId);
+	if (!isMature(plant)) {
+		L.popup({offset:[0,-8]}).setLatLng(plant.latlng).setContent(`${crop.name}: not ready yet.`).openOn(map);
+		return;
+	}
+	plant.harvested = true;
+	map.removeLayer(plant.marker);
+	game.cash += crop.sell;
+	hudCash.textContent = String(game.cash);
+	L.popup({offset:[0,-8]}).setLatLng(plant.latlng).setContent(`Harvested ${crop.name}! +TSh ${crop.sell}`).openOn(map);
+}
 
-        const upBtn = document.getElementById('up-btn');
-        const downBtn = document.getElementById('down-btn');
-        const leftBtn = document.getElementById('left-btn');
-        const rightBtn = document.getElementById('right-btn');
-        
-        // --- Firebase/Firestore (Simulated for Immersive Environment) ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        
-        async function initializeFirebase() {
-            try {
-                if (Object.keys(firebaseConfig).length > 0) {
-                    app = initializeApp(firebaseConfig);
-                    auth = getAuth(app);
-                    db = getFirestore(app);
-                    setLogLevel('debug');
-                } else {
-                    console.log("Firebase config not available. Running in local mode.");
-                }
-            } catch (e) {
-                console.error("Firebase initialization failed:", e);
-            }
-            
-            // Sign in anonymously if no auth token is provided
-            if (auth) {
-                try {
-                    if (typeof __initial_auth_token !== 'undefined') {
-                         await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                         await signInAnonymously(auth);
-                    }
-                } catch (error) {
-                    console.error("Firebase auth failed:", error);
-                }
+/* =================== Map click and status =================== */
+let lastLatLng = null, lastSoil = '—';
+let spotMarker = null;
 
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        console.log("Authenticated with user ID:", userId);
-                        userIdDisplay.textContent = userId;
-                        await loadGameData();
-                    } else {
-                        console.log("User is signed out.");
-                        userId = 'local-user';
-                        userIdDisplay.textContent = userId;
-                        startGame();
-                    }
-                });
-            } else {
-                startGame();
-            }
-        }
-        
-        async function loadGameData() {
-            if (!db || !userId) return;
-            try {
-                const userRef = doc(db, `artifacts/${__app_id}/users/${userId}`, "gameState");
-                const docSnap = await getDoc(userRef);
-                if (docSnap.exists()) {
-                    gameState = docSnap.data().gameState;
-                    // Deserialize the farm grid from the stored JSON string
-                    gameState.farm = JSON.parse(gameState.farm); 
-                    console.log("Game state loaded from Firestore.");
-                } else {
-                    console.log("No game state found, starting a new game.");
-                }
-                startGame();
-            } catch (e) {
-                console.error("Error loading game state:", e);
-                startGame();
-            }
-        }
+map.on('click', async (e) => {
+	lastLatLng = e.latlng;
+	lastSoil = soilAt(e.latlng.lat, e.latlng.lng);
+	const inBld = isNoPlantArea(e.latlng);
+	const inWater = isWaterArea(e.latlng);
 
-        async function saveGameData() {
-            if (!db || !userId) return;
-            try {
-                const userRef = doc(db, `artifacts/${__app_id}/users/${userId}`, "gameState");
-                // Serialize the farm grid to a JSON string for storage
-                const dataToSave = { ...gameState, farm: JSON.stringify(gameState.farm) };
-                await setDoc(userRef, { gameState: dataToSave });
-                console.log("Game state saved to Firestore.");
-            } catch (e) {
-                console.error("Error saving game state:", e);
-            }
-        }
-        
-        // --- Game Setup & Loop ---
-        function startGame() {
-            // Initialize the farm grid if it's new
-            if (farmGrid.length === 0) {
-                 for (let y = 0; y < FARM_HEIGHT; y++) {
-                     farmGrid[y] = [];
-                     for (let x = 0; x < FARM_WIDTH; x++) {
-                         farmGrid[y][x] = {
-                             state: 'dirt',
-                             crop: null,
-                             moisture: 0.5,
-                             growth: 0
-                         };
-                     }
-                 }
-                 gameState.farm = farmGrid;
-                 showModal("Welcome!", "Welcome to AstroFarm! Use the arrow keys or the on-screen D-pad to move your farmer and the buttons to manage your fields. Your goal is to grow crops sustainably using NASA data.");
-            }
-            
-            fetchNASAData();
-            updateUI();
-            gameActive = true;
-            requestAnimationFrame(gameLoop);
-        }
+	kvSpot.textContent = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+	kvSoil.textContent = lastSoil;
+	kvStatus.textContent = inBld ? 'No-plant (buildings/town)' : (inWater ? 'Water zone' : 'OK');
 
-        // --- Drawing functions for canvas ---
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawFarmGrid();
-            drawPlayer();
-        }
+	if (!spotMarker) spotMarker = L.marker(e.latlng).addTo(map); else spotMarker.setLatLng(e.latlng);
 
-        function drawFarmGrid() {
-            for (let y = 0; y < FARM_HEIGHT; y++) {
-                for (let x = 0; x < FARM_WIDTH; x++) {
-                    const tile = gameState.farm[y][x];
-                    
-                    // Draw base soil
-                    ctx.fillStyle = '#6E4E37';
-                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                    ctx.strokeStyle = '#5C4033';
-                    ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+	const statusHtml = inBld ? '<span style="color:#fca5a5;">No-plant (buildings)</span>' :
+		inWater ? '<span style="color:#60a5fa;">Water zone</span>' : '<span style="color:#86efac;">OK to plant</span>';
 
-                    // Draw state-specific overlays
-                    if (tile.state === 'tilled') {
-                        ctx.fillStyle = '#4D3627';
-                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                    }
-                    if (tile.crop) {
-                        // Draw crop as a simple shape and color
-                        ctx.fillStyle = tile.crop.color;
-                        const growthSize = tile.growth * TILE_SIZE * 0.8;
-                        ctx.beginPath();
-                        ctx.arc(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, growthSize / 2, 0, 2 * Math.PI);
-                        ctx.fill();
-                    }
-                }
-            }
-        }
+	spotMarker.bindPopup(`
+		<div><b>Coords:</b> ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}</div>
+		<div><b>Soil:</b> ${lastSoil}</div>
+		<div><b>Status:</b> ${statusHtml}</div>
+	`).openPopup();
 
-        function drawPlayer() {
-            // Draw a simple animated character based on the state
-            const frame = Math.floor(player.frame) % 2; // Simple 2-frame animation
+	// Enable plant if OK or if water zone (mangrove option will enforce)
+	btnPlant.disabled = inBld;
+	btnFert.disabled = false; btnIrr.disabled = false;
+});
 
-            // Body
-            ctx.fillStyle = player.color;
-            ctx.fillRect(player.x * TILE_SIZE + TILE_SIZE/2 - player.w/2, player.y * TILE_SIZE + TILE_SIZE/2 - player.h/2, player.w, player.h);
+/* =================== Crop picker =================== */
+function openPicker() {
+	if (!lastLatLng) { alert('Tap the map first.'); return; }
+	const inBld = isNoPlantArea(lastLatLng);
+	if (inBld) { alert('You cannot plant on towns/buildings. Pick a nearby field.'); return; }
 
-            // Head (circle)
-            ctx.fillStyle = '#C0C0C0';
-            ctx.beginPath();
-            ctx.arc(player.x * TILE_SIZE + TILE_SIZE/2, player.y * TILE_SIZE + TILE_SIZE/2 - player.h/2 - 10, 10, 0, 2 * Math.PI);
-            ctx.fill();
-        }
+	const inWater = isWaterArea(lastLatLng);
+	pickerInfo.textContent = `Soil: ${lastSoil} | Water zone: ${inWater ? 'Yes' : 'No'}`;
 
-        // --- Game Loop ---
-        function gameLoop() {
-            if (!gameActive) return;
+	const allowed = cropCatalog.filter(c => {
+		const soilOk = c.soils.includes(lastSoil);
+		const waterOk = inWater ? c.requiresWater === true : c.requiresWater !== true;
+		return soilOk && waterOk;
+	});
 
-            // Update player animation frame
-            if (player.animation === 'walking') {
-                player.frame += 0.1;
-            } else {
-                player.frame = 0;
-            }
+	cropGrid.innerHTML = '';
+	if (!allowed.length) {
+		const div = document.createElement('div');
+		div.className = 'small';
+		div.textContent = 'No crops match this soil/location. Try a different spot.';
+		cropGrid.appendChild(div);
+	}
 
-            draw();
-            requestAnimationFrame(gameLoop);
-        }
+	allowed.forEach(c => {
+		const card = document.createElement('div');
+		card.className = 'card';
+		card.innerHTML = `
+			<div class="title">${c.emoji} ${c.name}</div>
+			<div class="line"><span>Soils</span><span>${c.soils.join(', ')}</span></div>
+			<div class="line"><span>Days to mature</span><span>${c.days}</span></div>
+			<div class="line"><span>Seed</span><span>TSh ${c.seed}</span></div>
+			<div class="line"><span>Sells for</span><span>TSh ${c.sell}</span></div>
+			<div class="buyRow">
+				<button class="btn" data-act="plant" data-id="${c.id}">Plant</button>
+				<button class="btn" data-act="buy" data-id="${c.id}">Buy Seed</button>
+				<span class="small">You own: <b id="own-${c.id}">${seeds[c.id]}</b></span>
+			</div>
+		`;
+		cropGrid.appendChild(card);
+	});
+	picker.style.display = 'grid';
+}
+function closePicker() { picker.style.display = 'none'; }
+btnClosePicker.addEventListener('click', closePicker);
+cropGrid.addEventListener('click', (e) => {
+	const btn = e.target.closest('button[data-act]');
+	if (!btn) return;
+	const id = btn.getAttribute('data-id');
+	const act = btn.getAttribute('data-act');
+	const crop = cropCatalog.find(c => c.id === id);
+	if (act === 'buy') {
+		if (game.cash < crop.seed) { alert('Not enough money to buy seeds.'); return; }
+		game.cash -= crop.seed;
+		seeds[id] += 1;
+		hudCash.textContent = String(game.cash);
+		$('#own-' + id).textContent = seeds[id];
+	} else if (act === 'plant') {
+		if (!lastLatLng) { alert('Tap the map first.'); return; }
+		const inWater = isWaterArea(lastLatLng);
+		if (inWater && !crop.requiresWater) { alert('Only mangrove can be planted in water.'); return; }
+		if (!inWater && crop.requiresWater) { alert('Mangrove must be planted in water zones.'); return; }
+		// need seed
+		if (seeds[id] <= 0) {
+			if (!confirm(`You have no ${crop.name} seeds. Buy one for TSh ${crop.seed}?`)) return;
+			if (game.cash < crop.seed) { alert('Not enough money.'); return; }
+			game.cash -= crop.seed; seeds[id] += 1; hudCash.textContent = String(game.cash);
+			const own = $('#own-' + id); if (own) own.textContent = seeds[id];
+		}
+		seeds[id] -= 1;
+		if ($('#own-' + id)) $('#own-' + id).textContent = seeds[id];
+		addPlant(lastLatLng, id);
+		closePicker();
+		L.popup({offset:[0,-8]}).setLatLng(lastLatLng).setContent(`Planted ${crop.name}!`).openOn(map);
+	}
+});
 
-        // --- Data & Logic ---
-        function fetchNASAData() {
-            // This is a SIMULATION of fetching data from a NASA API.
-            // It generates new data for each turn.
-            gameState.nasaData = {
-                soilMoisture: Math.random() * 0.4 + 0.3, // 30-70%
-                temperature: Math.random() * 15 + 15,    // 15-30 C
-                ndvi: Math.random() * 0.5 + 0.4,         // 0.4-0.9
-                precipitation: Math.random() < 0.2 ? Math.random() * 10 : 0 // 20% chance of rain
-            };
-            updateUI();
-        }
-        
-        function updateUI() {
-            seasonDisplay.textContent = `Spring ${gameState.season}`;
-            fundsDisplay.textContent = `$${gameState.funds}`;
-            yieldDisplay.textContent = `${gameState.yield}`;
+/* =================== Time & controls =================== */
+function tickDay() {
+	game.day += 1; hudDay.textContent = String(game.day);
+	updatePlants();
+}
+btnPlayPause.addEventListener('click', () => {
+	if (game.timer) { clearInterval(game.timer); game.timer=null; btnPlayPause.textContent='Play ▷'; }
+	else { game.timer=setInterval(tickDay, game.dayMs); btnPlayPause.textContent='Pause ⏸'; }
+});
+btnStep.addEventListener('click', () => { if (!game.timer) tickDay(); });
+rngSpeed.addEventListener('input', () => {
+	game.dayMs = Number(rngSpeed.value);
+	lblDayLen.textContent = `${Math.round(game.dayMs/100)/10}s`.replace('.0','');
+	if (game.timer) { clearInterval(game.timer); game.timer=setInterval(tickDay, game.dayMs); }
+});
 
-            soilMoistureData.textContent = `${(gameState.nasaData.soilMoisture * 100).toFixed(1)}%`;
-            tempData.textContent = `${gameState.nasaData.temperature.toFixed(1)}°C`;
-            ndviData.textContent = gameState.nasaData.ndvi.toFixed(2);
-            precipData.textContent = `${gameState.nasaData.precipitation.toFixed(1)} mm`;
-        }
-        
-        function showModal(title, content) {
-            modalTitle.textContent = title;
-            modalContent.textContent = content;
-            modal.classList.remove('hidden');
-        }
+/* =================== Actions & keys =================== */
+btnPlant.addEventListener('click', openPicker);
+btnFert.addEventListener('click', () => {
+	if (!lastLatLng) return alert('Tap the map first.');
+	L.popup({offset:[0,-8]}).setLatLng(lastLatLng).setContent('Fertilizer added! 🌾').openOn(map);
+});
+btnIrr.addEventListener('click', () => {
+	if (!lastLatLng) return alert('Tap the map first.');
+	L.popup({offset:[0,-8]}).setLatLng(lastLatLng).setContent('Irrigated! 💧').openOn(map);
+});
+document.addEventListener('keydown', (e) => {
+	const k = e.key;
+	if (k === 'p' || k === 'P') openPicker();
+	if (k === 'f' || k === 'F') btnFert.click();
+	if (k === 'i' || k === 'I') btnIrr.click();
+	if (k === ' ') { e.preventDefault(); btnPlayPause.click(); }
+	if (k === '+') { rngSpeed.value = Math.max(500, Number(rngSpeed.value) - 500); rngSpeed.dispatchEvent(new Event('input')); }
+	if (k === '-') { rngSpeed.value = Math.min(15000, Number(rngSpeed.value) + 500); rngSpeed.dispatchEvent(new Event('input')); }
+});
 
-        // --- Player Actions ---
-        tillBtn.addEventListener('click', () => {
-            const tile = gameState.farm[player.y][player.x];
-            if (tile.state === 'dirt') {
-                tile.state = 'tilled';
-                gameState.funds -= 10;
-                updateUI();
-                showModal("Tilling Complete!", "You've tilled the land. This prepares the soil for planting by breaking it up and aerating it. Proper tilling improves water infiltration and root growth.");
-                saveGameData();
-            } else {
-                showModal("Oops!", "This plot is not ready to be tilled.");
-            }
-        });
-        
-        plantBtn.addEventListener('click', () => {
-            const tile = gameState.farm[player.y][player.x];
-            if (tile.state === 'tilled' && !tile.crop && gameState.funds >= 50) {
-                const cropChoice = 'corn'; // For simplicity, we'll plant corn
-                tile.state = 'planted';
-                tile.crop = cropTypes[cropChoice];
-                gameState.funds -= 50;
-                updateUI();
-                showModal("Planting Seeds!", `You've planted ${cropTypes[cropChoice].name} seeds. Now they need sunlight and water to grow.`);
-                saveGameData();
-            } else {
-                showModal("Oops!", "This plot is not ready to be planted or you can't afford it.");
-            }
-        });
-
-        waterBtn.addEventListener('click', () => {
-            const tile = gameState.farm[player.y][player.x];
-            if (tile.crop) {
-                tile.moisture = 1.0; // Max out moisture
-                showModal("Watered!", `You've watered your ${tile.crop.name}. Using NASA's SMAP data, you can see when fields need watering, preventing both under-watering and wasteful over-watering.`);
-                saveGameData();
-            } else {
-                showModal("Oops!", "There is no crop on this plot to water.");
-            }
-        });
-
-        harvestBtn.addEventListener('click', () => {
-            const tile = gameState.farm[player.y][player.x];
-            if (tile.crop && tile.growth >= 1) {
-                const yieldAmount = tile.crop.yield * (tile.moisture >= 0.8 ? 1.5 : 1); // Bonus for good watering
-                gameState.yield += yieldAmount;
-                gameState.funds += yieldAmount * 2; // Get funds for harvest
-                tile.state = 'dirt';
-                tile.crop = null;
-                tile.growth = 0;
-                updateUI();
-                showModal("Harvest Complete!", `You harvested ${yieldAmount} bushels of ${tile.crop.name}! Your final yield was positively influenced by your good irrigation.`);
-                saveGameData();
-            } else {
-                showModal("Oops!", "There's nothing to harvest here yet!");
-            }
-        });
-
-        nextTurnBtn.addEventListener('click', () => {
-            // Update crop growth
-            gameState.farm.forEach(row => {
-                row.forEach(tile => {
-                    if (tile.crop) {
-                        // Growth is affected by simulated moisture and temperature
-                        const growthFactor = (tile.moisture / 1.0) * (gameState.nasaData.temperature / 30);
-                        tile.growth += tile.crop.growthRate * growthFactor;
-                        tile.moisture = Math.max(0, tile.moisture - 0.1 - (gameState.nasaData.temperature / 100)); // Moisture drains
-                    }
-                });
-            });
-
-            // Handle precipitation
-            if (gameState.nasaData.precipitation > 0) {
-                 gameState.farm.forEach(row => {
-                    row.forEach(tile => {
-                        if (tile.crop) {
-                            tile.moisture = Math.min(1.0, tile.moisture + gameState.nasaData.precipitation / 20);
-                        }
-                    });
-                });
-                showModal("It's Raining!", `The satellite data shows precipitation. Your crops just got a boost of water from above, which is tracked by our virtual SMAP sensor!`);
-            }
-
-            gameState.season++;
-            if (gameState.season > 4) {
-                 gameState.season = 1;
-            }
-            fetchNASAData();
-            updateUI();
-            saveGameData();
-        });
-
-        modalCloseBtn.addEventListener('click', () => {
-            modal.classList.add('hidden');
-        });
-
-        // --- Player Movement Function ---
-        function movePlayer(direction) {
-            let moved = false;
-            switch(direction) {
-                case 'up':
-                    if (player.y > 0) { player.y--; moved = true; }
-                    break;
-                case 'down':
-                    if (player.y < FARM_HEIGHT - 1) { player.y++; moved = true; }
-                    break;
-                case 'left':
-                    if (player.x > 0) { player.x--; moved = true; }
-                    break;
-                case 'right':
-                    if (player.x < FARM_WIDTH - 1) { player.x++; moved = true; }
-                    break;
-            }
-            player.animation = moved ? 'walking' : 'idle';
-        }
-
-        // --- Keyboard Controls for Player Movement ---
-        document.addEventListener('keydown', (e) => {
-            switch(e.key) {
-                case 'ArrowUp':
-                    movePlayer('up');
-                    break;
-                case 'ArrowDown':
-                    movePlayer('down');
-                    break;
-                case 'ArrowLeft':
-                    movePlayer('left');
-                    break;
-                case 'ArrowRight':
-                    movePlayer('right');
-                    break;
-            }
-        });
-
-        // --- On-screen D-pad Controls for Mobile ---
-        upBtn.addEventListener('click', () => movePlayer('up'));
-        downBtn.addEventListener('click', () => movePlayer('down'));
-        leftBtn.addEventListener('click', () => movePlayer('left'));
-        rightBtn.addEventListener('click', () => movePlayer('right'));
-
-        // Initial setup
-        initializeFirebase();
-
-    </script>
+/* =================== First-time hint =================== */
+function showHint(msg) { hintBody.textContent = msg; hint.style.display = 'block'; setTimeout(()=>hint.style.display='none', 3500); }
+showHint('Tap the map, then press P to choose a Tanzanian crop.');
+</script>
 </body>
 </html>
+```
